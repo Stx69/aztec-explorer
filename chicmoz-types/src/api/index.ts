@@ -1,0 +1,89 @@
+import { z } from "zod";
+import {
+  chicmozL1L2ValidatorSchema,
+  chicmozL2BlockSchema,
+  chicmozL2ContractClassRegisteredEventSchema,
+  chicmozL2ContractInstanceDeployedEventSchema,
+  chicmozL2TxEffectSchema,
+  chicmozL2PendingTxSchema,
+  hexStringSchema,
+} from "../index.js";
+
+export const chicmozSearchQuerySchema = z.lazy(() =>
+  z.object({
+    q: z.preprocess((val: unknown) => {
+      if (typeof val === "string") {
+        if (val.startsWith("0x")) {
+          return val;
+        } else if (val.match(/^\d+$/)?.length) {
+          return BigInt(val);
+        } else {
+          return `0x${val}`;
+        }
+      }
+      return val;
+    }, hexStringSchema.or(chicmozL2BlockSchema.shape.height)),
+  }),
+);
+
+export const chicmozSearchResultsSchema = z.lazy(() =>
+  z.object({
+    searchPhrase: z.string(),
+    results: z.object({
+      blocks: z.array(
+        z.object({
+          hash: chicmozL2BlockSchema.shape.hash,
+          blockNumber:
+            chicmozL2BlockSchema.shape.header.shape.globalVariables.shape
+              .blockNumber,
+          slotNumber:
+            chicmozL2BlockSchema.shape.header.shape.globalVariables.shape
+              .slotNumber,
+        }),
+      ),
+      txEffects: z.array(
+        z.object({
+          txHash: chicmozL2TxEffectSchema.shape.txHash,
+          partOfBlockWithHash: chicmozL2BlockSchema.shape.hash.optional(),
+        }),
+      ),
+      droppedTx: z.array(
+        z.object({
+          txHash: chicmozL2TxEffectSchema.shape.txHash,
+        }),
+      ),
+      pendingTx: z.array(
+        z.object({
+          txHash: chicmozL2TxEffectSchema.shape.txHash,
+        }),
+      ),
+      registeredContractClasses: z.array(
+        z.object({
+          contractClassId:
+            chicmozL2ContractClassRegisteredEventSchema.shape.contractClassId,
+          version: chicmozL2ContractClassRegisteredEventSchema.shape.version,
+          partOfBlockWithHash: chicmozL2BlockSchema.shape.hash.optional(),
+        }),
+      ),
+      contractInstances: z.array(
+        z.object({
+          address: chicmozL2ContractInstanceDeployedEventSchema.shape.address,
+          partOfBlockWithHash: chicmozL2BlockSchema.shape.hash.optional(),
+        }),
+      ),
+      validators: z.array(
+        z.object({
+          validatorAddress: chicmozL1L2ValidatorSchema.shape.attester,
+        }),
+      ),
+      accounts: z.array(
+        z.object({
+          address: chicmozL2PendingTxSchema.shape.feePayer,
+        }),
+      ),
+    }),
+  }),
+);
+
+export type ChicmozSearchResults = z.infer<typeof chicmozSearchResultsSchema>;
+export type ChicmozSearchQuery = z.infer<typeof chicmozSearchQuerySchema>;
